@@ -15,9 +15,59 @@ func TaskHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
 		addTaskHandler(w, r)
+	case http.MethodGet:
+		getTaskHandler(w, r) // ← добавили
+	case http.MethodPut:
+		updateTaskHandler(w, r) // ← добавили
 	default:
 		http.Error(w, "метод не поддерживается", http.StatusMethodNotAllowed)
 	}
+}
+
+func getTaskHandler(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.URL.Query().Get("id"))
+	if id == "" {
+		writeJSON(w, map[string]string{"error": "Не указан идентификатор"})
+		return
+	}
+
+	t, err := db.GetTask(id)
+	if err != nil {
+		writeJSON(w, map[string]string{"error": err.Error()})
+		return
+	}
+
+	// Возвращаем саму задачу объектом (как в примере из задания)
+	writeJSON(w, t)
+}
+func updateTaskHandler(w http.ResponseWriter, r *http.Request) {
+	var t db.Task
+	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+		writeJSON(w, map[string]string{"error": "ошибка чтения JSON"})
+		return
+	}
+
+	if strings.TrimSpace(t.ID) == "" {
+		writeJSON(w, map[string]string{"error": "Не указан идентификатор"})
+		return
+	}
+	if strings.TrimSpace(t.Title) == "" {
+		writeJSON(w, map[string]string{"error": "не указан заголовок задачи"})
+		return
+	}
+
+	// Валидация/нормализация даты и правила — та же логика, что в add
+	if err := checkDate(&t); err != nil {
+		writeJSON(w, map[string]string{"error": err.Error()})
+		return
+	}
+
+	if err := db.UpdateTask(&t); err != nil {
+		writeJSON(w, map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, map[string]any{}) // Успех — пустой JSON
 }
 
 func addTaskHandler(w http.ResponseWriter, r *http.Request) {
