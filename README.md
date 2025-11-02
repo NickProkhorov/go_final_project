@@ -34,13 +34,17 @@
 ```bash
 git clone https://github.com/NickProkhorov/go_final_project.git
 cd go_final_project
+```
+
+---
 
 ### 2. Настройка окружения
 
 Создайте файл .env в корне проекта c содержаением: 
+```bash
 TODO_PORT=7540
 TODO_DBFILE=./scheduler.db
-
+```
 Если файл не создан, используются значения по умолчанию:
 порт — 7540;
 база данных — scheduler.db в корне проекта.
@@ -53,21 +57,25 @@ TODO_DBFILE=./scheduler.db
 ## ⚙️ Инструкция по запуску тестов
 
 ### 1. Запуск всех тестов: 
+```bash
 go test ./tests
+```
 
 ### 2. Запустить атомарные тесты: 
+```bash
 go test -run ^TestAddTask$ ./tests
 go test -run ^TestTasks$ ./tests
 go test -run ^TestTask$ ./tests
 go test -run ^TestEditTask$ ./tests
 go test -run ^TestDone$ ./tests
 go test -run ^TestDelTask$ ./tests
-
+```
 
 ## ⚙️ Технологический стек
-
+```bash
 Go 1.22+
 SQLite (modernc.org/sqlite)
 net/http — встроенный HTTP-сервер
 encoding/json — сериализация/десериализация данных
 HTML/JS frontend — готовый из репозитория Практикума
+```
