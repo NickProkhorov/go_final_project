@@ -59,7 +59,7 @@ func Tasks(limit int) ([]*Task, error) {
 	return out, nil
 }
 
-// GetTask возвращает задачу по идентификатору (строкой).
+// GetTask возвращает задачу по по ID (строкой).
 func GetTask(id string) (*Task, error) {
 	row := DB.QueryRow(
 		`SELECT id, date, title, comment, repeat
@@ -104,6 +104,37 @@ func UpdateTask(t *Task) error {
 		return err
 	}
 	if aff == 0 {
+		return fmt.Errorf("Задача не найдена")
+	}
+	return nil
+}
+
+func DeleteTask(id string) error {
+	res, err := DB.Exec(`DELETE FROM scheduler WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("Задача не найдена")
+	}
+	return nil
+}
+
+// UpdateDate обновляет только дату у задачи.
+func UpdateDate(next string, id string) error {
+	res, err := DB.Exec(`UPDATE scheduler SET date = ? WHERE id = ?`, next, id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
 		return fmt.Errorf("Задача не найдена")
 	}
 	return nil

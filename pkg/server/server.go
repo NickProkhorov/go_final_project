@@ -16,6 +16,7 @@ func Run(webDir, port string) error {
 	mux.HandleFunc("/api/nextdate", api.NextDateHandler)
 	mux.HandleFunc("/api/task", api.TaskHandler)
 	mux.HandleFunc("/api/tasks", api.TasksHandler)
+	mux.HandleFunc("/api/task/done", api.TaskDoneHandler)
 
 	// раздаём фронтенд
 	fs := http.FileServer(http.Dir(webDir))

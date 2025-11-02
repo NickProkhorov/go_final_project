@@ -16,9 +16,11 @@ func TaskHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		addTaskHandler(w, r)
 	case http.MethodGet:
-		getTaskHandler(w, r) // ← добавили
+		getTaskHandler(w, r)
 	case http.MethodPut:
-		updateTaskHandler(w, r) // ← добавили
+		updateTaskHandler(w, r)
+	case http.MethodDelete:
+		deleteTaskHandler(w, r) // ← добавили
 	default:
 		http.Error(w, "метод не поддерживается", http.StatusMethodNotAllowed)
 	}
@@ -141,4 +143,17 @@ func isBeforeDate(d, now time.Time) bool {
 	d0 := time.Date(yd, md, dd, 0, 0, 0, 0, time.UTC)
 	n0 := time.Date(yn, mn, dn, 0, 0, 0, 0, time.UTC)
 	return d0.Before(n0)
+}
+
+func deleteTaskHandler(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.URL.Query().Get("id"))
+	if id == "" {
+		writeJSON(w, map[string]string{"error": "Не указан идентификатор"})
+		return
+	}
+	if err := db.DeleteTask(id); err != nil {
+		writeJSON(w, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, map[string]any{}) // {}
 }
