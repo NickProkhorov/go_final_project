@@ -18,7 +18,7 @@ func NextDateHandler(w http.ResponseWriter, r *http.Request) {
 	if nowStr == "" {
 		now = time.Now()
 	} else {
-		now, err = time.Parse("20060102", nowStr)
+		now, err = time.Parse(DateLayout, nowStr)
 		if err != nil {
 			http.Error(w, "некорректная дата параметра now", http.StatusBadRequest)
 			return

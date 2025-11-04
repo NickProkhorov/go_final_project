@@ -1,6 +1,8 @@
+// pkg/api/addtask.go
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -20,91 +22,95 @@ func TaskHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		updateTaskHandler(w, r)
 	case http.MethodDelete:
-		deleteTaskHandler(w, r) // ← добавили
+		deleteTaskHandler(w, r)
 	default:
-		http.Error(w, "метод не поддерживается", http.StatusMethodNotAllowed)
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "метод не поддерживается"})
 	}
 }
 
 func getTaskHandler(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(r.URL.Query().Get("id"))
 	if id == "" {
-		writeJSON(w, map[string]string{"error": "Не указан идентификатор"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "не указан идентификатор"})
 		return
 	}
 
 	t, err := db.GetTask(id)
 	if err != nil {
-		writeJSON(w, map[string]string{"error": err.Error()})
+		// 404 если записи нет, иначе 500
+		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, db.ErrNotFound) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "задача не найдена"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 
-	// Возвращаем саму задачу объектом (как в примере из задания)
-	writeJSON(w, t)
+	writeJSON(w, http.StatusOK, t)
 }
+
 func updateTaskHandler(w http.ResponseWriter, r *http.Request) {
 	var t db.Task
 	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
-		writeJSON(w, map[string]string{"error": "ошибка чтения JSON"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "некорректный JSON"})
 		return
 	}
 
 	if strings.TrimSpace(t.ID) == "" {
-		writeJSON(w, map[string]string{"error": "Не указан идентификатор"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "не указан идентификатор"})
 		return
 	}
 	if strings.TrimSpace(t.Title) == "" {
-		writeJSON(w, map[string]string{"error": "не указан заголовок задачи"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "не указан заголовок задачи"})
 		return
 	}
 
-	// Валидация/нормализация даты и правила — та же логика, что в add
+	// та же валидация/нормализация, что и при добавлении
 	if err := checkDate(&t); err != nil {
-		writeJSON(w, map[string]string{"error": err.Error()})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 
 	if err := db.UpdateTask(&t); err != nil {
-		writeJSON(w, map[string]string{"error": err.Error()})
+		// 404 если строка не обновлена из-за неверного id
+		if errors.Is(err, db.ErrNotFound) || errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "задача не найдена"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 
-	writeJSON(w, map[string]any{}) // Успех — пустой JSON
+	writeJSON(w, http.StatusOK, map[string]any{}) // {}
 }
 
 func addTaskHandler(w http.ResponseWriter, r *http.Request) {
 	var t db.Task
 	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
-		writeJSON(w, map[string]string{"error": "ошибка чтения JSON"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "некорректный JSON"})
 		return
 	}
 
 	if strings.TrimSpace(t.Title) == "" {
-		writeJSON(w, map[string]string{"error": "не указан заголовок задачи"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "не указан заголовок задачи"})
 		return
 	}
 
 	if err := checkDate(&t); err != nil {
-		writeJSON(w, map[string]string{"error": err.Error()})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 
 	id, err := db.AddTask(&t)
 	if err != nil {
-		writeJSON(w, map[string]string{"error": "ошибка добавления задачи"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 
-	writeJSON(w, map[string]string{"id": strconv.FormatInt(id, 10)})
-}
-
-func writeJSON(w http.ResponseWriter, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	_ = json.NewEncoder(w).Encode(v)
+	writeJSON(w, http.StatusCreated, map[string]string{"id": strconv.FormatInt(id, 10)})
 }
 
 // валидация/нормализация даты
-
 func checkDate(t *db.Task) error {
 	now := time.Now()
 
@@ -122,7 +128,7 @@ func checkDate(t *db.Task) error {
 		if err != nil {
 			return errors.New("некорректное правило повторения")
 		}
-		// Сдвигаем ТОЛЬКО если дата в прошлом (строго меньше сегодня)
+		// Сдвигаем только если дата в прошлом
 		if isBeforeDate(d, now) {
 			t.Date = next
 		}
@@ -136,7 +142,7 @@ func checkDate(t *db.Task) error {
 	return nil
 }
 
-// сравнивает только даты (без времени): true, если d > now
+// сравнивает только даты (без времени): true, если d < now (в прошлом)
 func isBeforeDate(d, now time.Time) bool {
 	yd, md, dd := d.Date()
 	yn, mn, dn := now.Date()
@@ -148,12 +154,16 @@ func isBeforeDate(d, now time.Time) bool {
 func deleteTaskHandler(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(r.URL.Query().Get("id"))
 	if id == "" {
-		writeJSON(w, map[string]string{"error": "Не указан идентификатор"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "не указан идентификатор"})
 		return
 	}
 	if err := db.DeleteTask(id); err != nil {
-		writeJSON(w, map[string]string{"error": err.Error()})
+		if errors.Is(err, db.ErrNotFound) || errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "задача не найдена"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, map[string]any{}) // {}
+	writeJSON(w, http.StatusOK, map[string]any{})
 }

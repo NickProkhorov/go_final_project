@@ -2,9 +2,13 @@ package db
 
 import (
 	"database/sql"
-	"fmt"
+	"errors"
 	"strconv"
 )
+
+const DefaultTasksLimit = 50
+
+var ErrNotFound = errors.New("not found")
 
 type Task struct {
 	ID      string `json:"id,omitempty"`
@@ -17,7 +21,7 @@ type Task struct {
 // Tasks возвращает ближайшие задачи, отсортированные по дате по возрастанию.
 func Tasks(limit int) ([]*Task, error) {
 	if limit <= 0 {
-		limit = 50
+		limit = DefaultTasksLimit
 	}
 	rows, err := DB.Query(
 		`SELECT id, date, title, comment, repeat
@@ -75,7 +79,7 @@ func GetTask(id string) (*Task, error) {
 	)
 	if err := row.Scan(&idi, &date, &title, &comment, &repeat); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("Задача не найдена")
+			return nil, ErrNotFound
 		}
 		return nil, err
 	}
@@ -104,7 +108,7 @@ func UpdateTask(t *Task) error {
 		return err
 	}
 	if aff == 0 {
-		return fmt.Errorf("Задача не найдена")
+		return ErrNotFound
 	}
 	return nil
 }
@@ -119,7 +123,7 @@ func DeleteTask(id string) error {
 		return err
 	}
 	if n == 0 {
-		return fmt.Errorf("Задача не найдена")
+		return ErrNotFound
 	}
 	return nil
 }
@@ -135,7 +139,17 @@ func UpdateDate(next string, id string) error {
 		return err
 	}
 	if n == 0 {
-		return fmt.Errorf("Задача не найдена")
+		return ErrNotFound
 	}
 	return nil
+}
+
+// AddTask вставляет задачу и возвращает её ID.
+func AddTask(task *Task) (int64, error) {
+	const q = `INSERT INTO scheduler (date, title, comment, repeat) VALUES (?, ?, ?, ?)`
+	res, err := DB.Exec(q, task.Date, task.Title, task.Comment, task.Repeat)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
 }

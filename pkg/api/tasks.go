@@ -11,11 +11,10 @@ type TasksResp struct {
 }
 
 func TasksHandler(w http.ResponseWriter, r *http.Request) {
-	// базовый вариант без поиска, лимит фиксируем 50
-	tasks, err := db.Tasks(50)
+	tasks, err := db.Tasks(db.DefaultTasksLimit)
 	if err != nil {
-		writeJSON(w, map[string]string{"error": "ошибка получения задач"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "ошибка получения задач"})
 		return
 	}
-	writeJSON(w, TasksResp{Tasks: tasks})
+	writeJSON(w, http.StatusOK, TasksResp{Tasks: tasks})
 }

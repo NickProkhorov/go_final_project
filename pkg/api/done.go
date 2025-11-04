@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -11,30 +12,38 @@ import (
 // TaskDoneHandler — POST /api/task/done?id=...
 func TaskDoneHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "метод не поддерживается", http.StatusMethodNotAllowed)
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "метод не поддерживается"})
 		return
 	}
 
 	id := strings.TrimSpace(r.URL.Query().Get("id"))
 	if id == "" {
-		writeJSON(w, map[string]string{"error": "Не указан идентификатор"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "не указан идентификатор"})
 		return
 	}
 
 	// 1) Получаем задачу
 	t, err := db.GetTask(id)
 	if err != nil {
-		writeJSON(w, map[string]string{"error": err.Error()})
+		if errors.Is(err, db.ErrNotFound) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "задача не найдена"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 
 	// 2) Если не периодическая — удалить
 	if strings.TrimSpace(t.Repeat) == "" {
 		if err := db.DeleteTask(id); err != nil {
-			writeJSON(w, map[string]string{"error": err.Error()})
+			if errors.Is(err, db.ErrNotFound) {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "задача не найдена"})
+				return
+			}
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
 		}
-		writeJSON(w, map[string]any{}) // {}
+		writeJSON(w, http.StatusOK, map[string]any{})
 		return
 	}
 
@@ -42,13 +51,17 @@ func TaskDoneHandler(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	next, err := NextDate(now, t.Date, t.Repeat)
 	if err != nil {
-		writeJSON(w, map[string]string{"error": "некорректное правило повторения"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "некорректное правило повторения"})
 		return
 	}
 	if err := db.UpdateDate(next, id); err != nil {
-		writeJSON(w, map[string]string{"error": err.Error()})
+		if errors.Is(err, db.ErrNotFound) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "задача не найдена"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
+	writeJSON(w, http.StatusOK, map[string]any{})
 
-	writeJSON(w, map[string]any{}) // {}
 }
